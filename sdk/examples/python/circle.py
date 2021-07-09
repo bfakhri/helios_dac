@@ -37,34 +37,26 @@ frames.append(frameType())
 for idx,angle in enumerate(np.linspace(0, 2*np.pi, num_points)):
     x_coord = xy_max*((math.cos(angle)+1))/2
     y_coord = xy_max*((math.sin(angle)+1))/2
-    #if(idx % 100 < 50):
-    #    lum = 0
-    #else:
-    #    lum = 255
-    #green = int(lum*(math.cos(angle) + 1)/2)
-    #red = int(lum*(-1*math.cos(angle) + 1)/2)
-    #red = 160
-    #green = 255
-    #blue = 130
     red = 255
     green = 255
-    blue = 2
-    frames[0][idx] = HeliosPoint(int(x_coord),int(y_coord), red, green, blue, 255)
-    #frames[0][idx] = HeliosPoint(int(x_coord),int(y_coord), lum, lum, lum, 255)
+    blue = 255
+    #if(angle > np.pi and angle < 1.5*np.pi):
+    if(idx%10 < 8):
+        lum = 0
+    else:
+        lum = 1
+    frames[0][idx] = HeliosPoint(int(x_coord),int(y_coord), lum*red, lum*green, lum*blue, 255)
 
 dac_idx = 0
 
 step_num = 0
 #Play frames on DAC
 try:
+    HeliosLib.WriteFrame(dac_idx, 65000, 0, ctypes.pointer(frames[0]), num_points) #Send the frame
     while(True):
-        statusAttempts = 0
-        # Make 512 attempts for DAC status to be ready. After that, just give up and try to write the frame anyway
-        while (statusAttempts < 512 and HeliosLib.GetStatus(dac_idx) != 1):
-            statusAttempts += 1
-        HeliosLib.WriteFrame(dac_idx, 65000, 0, ctypes.pointer(frames[0]), num_points) #Send the frame
-        step_num += 1
-        print('Step ', step_num)
+        continue
 except KeyboardInterrupt:
     print('Closing the program')
     HeliosLib.CloseDevices()
+
+print('Closed')
