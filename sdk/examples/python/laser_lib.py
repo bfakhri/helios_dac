@@ -33,10 +33,12 @@ class DacQueue:
         # The last position of the last pattern (x,y)
         self.last_pos = (0,0)
         # Sample rate of the DAC
-        self.dac_rate = 55000
+        self.dac_rate = 30000
         # Debugging dac rate
-        #self.debug_rate = 550
         self.debug_rate = 150
+        # Color shift constants (this should change w/ dac_rate)
+        #self.color_shifts = [11, 10, 9]
+        self.color_shifts = [5, 5, 4]
         
     
     def submit(self, pat_pos, pat_col, angular_density=100, debug=False):
@@ -82,7 +84,7 @@ class DacQueue:
 
         # Perform color correction if not gap points
         if(not gap):
-            arr_col = color_correction(arr_col)
+            arr_col = color_correction(arr_col, color_shifts=self.color_shifts)
         # Format the color array (0-1.0) -> int(0-255)
         arr_col = (arr_col*255).astype(np.int32)
         # Fill a heliospoint arr with these values
@@ -117,7 +119,7 @@ class DacQueue:
         frame_rate = self.debug_rate if debug else self.dac_rate
         self.dac.HeliosLib.WriteFrame(0, frame_rate, flags, ctypes.pointer(points), num_points)
 
-def color_correction(arr_col, color_shifts = [11, 10, 9]):
+def color_correction(arr_col, color_shifts=[]):
     '''
     Corrects the nonlinearities in the color curve 
     Color shifts correspond to [Red, Green, Blue]
