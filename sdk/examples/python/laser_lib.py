@@ -21,6 +21,8 @@ class Dac:
         print("Found ", self.num_devices, "Helios DACs")
         # Define limits
         self.xy_max = int(2**12-1)
+        # Open the shutter
+        self.HeliosLib.SetShutter(False) 
 
 class DacQueue:
     '''

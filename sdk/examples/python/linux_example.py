@@ -21,7 +21,7 @@ class HeliosPoint(ctypes.Structure):
 HeliosLib = ctypes.cdll.LoadLibrary("./libHeliosDacAPI.so")
 numDevices = HeliosLib.OpenDevices()
 print("Found ", numDevices, "Helios DACs")
-
+HeliosLib.SetShutter(False)
 #Create sample frames
 frames = [0 for x in range(30)]
 frameType = HeliosPoint * 1000
