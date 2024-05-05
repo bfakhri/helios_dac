@@ -2,7 +2,6 @@ import ctypes
 import numpy as np
 import math
 import time
-import cv2
 
 #Define point structure
 class HeliosPoint(ctypes.Structure):
@@ -52,8 +51,8 @@ class DacQueue:
         dist = np.sqrt(np.sum(np.power(self.last_pos-pat_pos[0,:], 2)))
         num_gap_points = int(dist*angular_density)
 
-        gap_pos = np.linspace(self.last_pos, pat_pos[0,:], num_gap_points, dtype=np.float)
-        gap_col = np.zeros((num_gap_points, 3), dtype=np.float)
+        gap_pos = np.linspace(self.last_pos, pat_pos[0,:], num_gap_points, dtype=float)
+        gap_col = np.zeros((num_gap_points, 3), dtype=float)
         if(debug):
             gap_col = np.ones_like(gap_col)/4
 
@@ -168,7 +167,7 @@ def connect_in_space(arr_pos_list, angular_density=100, wait_per=None):
         # Make the transition
         dist = np.sqrt(np.sum(np.power(pos_start-pos_end, 2)))
         num_gap_points = int(dist*angular_density)
-        gap_pos = np.linspace(pos_start, pos_end, num_gap_points, dtype=np.float)
+        gap_pos = np.linspace(pos_start, pos_end, num_gap_points, dtype=float)
         
         # If we have a wait period, add it to the end of the gap positions
         if(wait_per):
