@@ -42,7 +42,7 @@ class DacQueue:
         self.color_shifts = [5, 5, 4]
         
     
-    def submit(self, pat_pos, pat_col, angular_density=100, debug=False):
+    def submit(self, pat_pos, pat_col, angular_density=100, debug=False, loop=False):
         '''
         Submits a new pattern to the dac, transitioning smoothly from the last one.
         Angular density describes how many points per radian should be used to transition
@@ -63,9 +63,9 @@ class DacQueue:
         pat_points, num_pat_points = self.prep_pattern(pat_pos, pat_col)
         
         # Send the transition pattern to the dac
-        self.write_frames(gap_points, num_gap_points, do_not_loop=True, debug=debug)
+        self.write_frames(gap_points, num_gap_points, do_not_loop=not loop, debug=debug)
         # Send the new pattern to the dac
-        self.write_frames(pat_points, num_pat_points, do_not_loop=True, debug=debug)
+        self.write_frames(pat_points, num_pat_points, do_not_loop=not loop, debug=debug)
         # Set the last_position
         self.last_pos = pat_pos[-1, :].copy()
         
