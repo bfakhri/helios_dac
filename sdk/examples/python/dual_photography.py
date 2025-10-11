@@ -94,26 +94,30 @@ if __name__ == "__main__":
         print(f"✅ Camera {camera_index} initialized.")
 
         # --- Scanning Parameters ---
-        xy_min = -0.86
-        xy_max = 0.86
+        y_min = 0
+        y_max = 1.0
+        x_min = -0.4
+        x_max = 0.4
         queue.dac_rate = 10000
         T = 100  # Points in a single scan line
         T_rew = T*10 # Points for the rewind path
         
         # Define the laser path for a single line scan (left to right)
         arr_pos = np.zeros((T, 2))
-        arr_pos[:, 0] = np.linspace(xy_max, xy_min, T)
+        arr_pos[:, 0] = np.linspace(x_max, x_min, T)
         arr_col = np.ones((T, 3)) # Laser ON
 
         # Define the laser path for the rewind (right to left)
         arr_pos_rew = np.zeros((T_rew, 2))
-        arr_pos_rew[:, 0] = np.linspace(xy_min, xy_max, T_rew)
+        arr_pos_rew[:, 0] = np.linspace(x_min, x_max, T_rew)
         arr_col_rew = np.zeros((T_rew, 3)) # Laser OFF
 
-        num_lines = 100  # Vertical and horizontal resolution of the final image
+        #num_lines = 80 # Vertical and horizontal resolution of the final image
+        #num_lines = 200 # Vertical and horizontal resolution of the final image
+        num_lines = 10 # Vertical and horizontal resolution of the final image
         
-        lines_y = np.linspace(xy_max, xy_min, num_lines)
-        lines_x = np.linspace(xy_max, xy_min, num_lines)
+        lines_y = np.linspace(y_max, y_min, num_lines)
+        lines_x = np.linspace(x_max, x_min, num_lines)
         raw_img_arr = []
 
         print("\nStarting scene scan...")
@@ -144,13 +148,27 @@ if __name__ == "__main__":
         img = np.stack(raw_img_arr, axis=0)
         print(f"Image processed. Final shape: {img.shape}")
 
+
         # --- Display Result ---
         plt.figure(figsize=(8, 8))
-        plt.imshow(img, cmap='viridis', extent=[xy_min, xy_max, xy_min, xy_max])
+        plt.imshow(img, cmap='viridis', extent=[x_min, x_max, y_min, y_max])
         plt.title('Dual Photography Scan (Webcam)')
         plt.xlabel('Horizontal Scan')
         plt.ylabel('Vertical Scan')
         plt.colorbar(label='Measured Brightness')
+
+        try:
+            # Generate a filename with the current date and time
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            filename = f"dual_photography_scan_{timestamp}.png"
+
+            # Save the figure
+            plt.savefig(filename)
+            print(f"\nImage saved as {filename}")
+
+        except Exception as e:
+            print(f"\nError saving image: {e}")
+
         plt.show()
 
     except Exception as e:
