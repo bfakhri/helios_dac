@@ -94,10 +94,10 @@ if __name__ == "__main__":
         print(f"✅ Camera {camera_index} initialized.")
 
         # --- Scanning Parameters ---
-        y_min = 0
+        y_min = -1.0
         y_max = 1.0
-        x_min = -0.4
-        x_max = 0.4
+        x_min = -1.0
+        x_max = 1.0
         queue.dac_rate = 10000
         T = 100  # Points in a single scan line
         T_rew = T*10 # Points for the rewind path
@@ -113,8 +113,7 @@ if __name__ == "__main__":
         arr_col_rew = np.zeros((T_rew, 3)) # Laser OFF
 
         #num_lines = 80 # Vertical and horizontal resolution of the final image
-        #num_lines = 200 # Vertical and horizontal resolution of the final image
-        num_lines = 10 # Vertical and horizontal resolution of the final image
+        num_lines = 200 # Vertical and horizontal resolution of the final image
         
         lines_y = np.linspace(y_max, y_min, num_lines)
         lines_x = np.linspace(x_max, x_min, num_lines)
