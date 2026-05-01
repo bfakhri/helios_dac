@@ -72,40 +72,58 @@ def setup_plot():
     plt.xticks(rotation=45, ha='right')
     plt.subplots_adjust(bottom=0.20, right=0.85)
 
+# --- Additional Control Configuration ---
+MAX_CHANGE_RATE = 0.04   # Max change allowed per update (0.0 to 1.0 scale)
+SMOOTHING_FACTOR = 0.1  # EMA filter (1.0 = no smoothing, 0.1 = very heavy smoothing)
+
+# --- Updated Animation Update Function ---
 def update(frame_number):
-    global current_light
+    global current_light 
     
     if cap:
         ret, frame = cap.read()
         if not ret:
-            return line_r_cam, line_g_cam, line_b_cam
-        
+            return line_r_cam, line_g_cam, line_b_cam, line_r_lit, line_g_lit, line_b_lit
+
+        # 1. Get raw camera means
         b_mean = np.mean(frame[:, :, 0])
         g_mean = np.mean(frame[:, :, 1])
         r_mean = np.mean(frame[:, :, 2])
-        
         cam_rgb = np.array([r_mean, g_mean, b_mean])
-        error = TARGET_BRIGHTNESS - cam_rgb
-        current_light = np.clip(current_light + (KP * error), 0.0, 1.0)
         
+        # 2. Calculate the "Ideal" next step based on KP
+        error = TARGET_BRIGHTNESS - cam_rgb
+        target_step = KP * error
+        
+        # 3. Apply Slew Rate Limiting (Damping the "jump")
+        # This ensures the light doesn't change more than MAX_CHANGE_RATE in one frame
+        damped_step = np.clip(target_step, -MAX_CHANGE_RATE, MAX_CHANGE_RATE)
+        
+        # 4. Apply Exponential Moving Average (EMA) Filtering
+        # This smooths the transition: NewValue = (α * Target) + ((1-α) * OldValue)
+        next_light_raw = current_light + damped_step
+        current_light = (SMOOTHING_FACTOR * next_light_raw) + ((1 - SMOOTHING_FACTOR) * current_light)
+        
+        # 5. Final Clamp and Hardware Push
+        current_light = np.clip(current_light, 0.0, 1.0)
+        
+        global queue
         set_color(current_light, queue, T=100)
+        
     else:
-        r_mean, g_mean, b_mean = np.random.randint(50, 255, 3)
-        current_light = np.random.random(3)
+        # Mock data for demonstration
+        r_mean, g_mean, b_mean = np.random.randint(120, 140, 3)
+        current_light = np.clip(current_light + np.random.uniform(-0.01, 0.01, 3), 0, 1)
 
-    # Update Deques
+    # --- Data Handling & Plotting remain the same ---
     r_cam.append(r_mean); g_cam.append(g_mean); b_cam.append(b_mean)
     r_light.append(current_light[0]); g_light.append(current_light[1]); b_light.append(current_light[2])
     time_data.append(dt.datetime.now().strftime('%H:%M:%S'))
 
     x_data = np.arange(len(r_cam))
-    
-    # Update Camera Lines
     line_r_cam.set_data(x_data, r_cam)
     line_g_cam.set_data(x_data, g_cam)
     line_b_cam.set_data(x_data, b_cam)
-    
-    # Update Light Lines
     line_r_lit.set_data(x_data, r_light)
     line_g_lit.set_data(x_data, g_light)
     line_b_lit.set_data(x_data, b_light)
