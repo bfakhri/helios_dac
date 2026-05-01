@@ -11,23 +11,19 @@ import time
 queue = laser_lib.DacQueue()
 queue.dac_rate = 50000
 
-
 # --- Assume set_color is provided ---
-# (Remove or replace this block with your actual function import/definition)
 def set_color(rgb, queue, T):
     t = np.linspace(0, 1, T)
     arr_pos = np.zeros((T, 2))
-    arr_col = rgb[None, :] > t[:, None]
+    arr_col = (rgb[None, :] > t[:, None]).astype(float)
     queue.submit(arr_pos, arr_col, loop=True)
 
 # --- Configuration ---
 MAX_POINTS = 100
 UPDATE_INTERVAL_MS = 100
-
-# --- Control Loop Configuration ---
-TARGET_BRIGHTNESS = 128.0  # Target exposure value for all channels (0-255)
-KP = 0.005                 # Proportional gain (Adjust if the adjustment is too slow or too jumpy)
-current_light = np.array([0.5, 0.5, 0.5]) # Initial light brightness (R, G, B)
+TARGET_BRIGHTNESS = 128.0  
+KP = 0.005                 
+current_light = np.array([0.5, 0.5, 0.5]) 
 
 # --- Webcam Initialization ---
 try:
@@ -36,110 +32,96 @@ try:
         raise IOError("Cannot open webcam")
 except Exception as e:
     print(f"Error opening webcam: {e}")
-    print("Using random data for demonstration purposes.")
     cap = None
 
 # --- Data Storage ---
-r_data = deque(maxlen=MAX_POINTS)
-g_data = deque(maxlen=MAX_POINTS)
-b_data = deque(maxlen=MAX_POINTS)
+r_cam, g_cam, b_cam = deque(maxlen=MAX_POINTS), deque(maxlen=MAX_POINTS), deque(maxlen=MAX_POINTS)
+r_light, g_light, b_light = deque(maxlen=MAX_POINTS), deque(maxlen=MAX_POINTS), deque(maxlen=MAX_POINTS)
 time_data = deque(maxlen=MAX_POINTS)
 
 # --- Plot Initialization ---
-fig, ax = plt.subplots(figsize=(10, 5))
-line_r, = ax.plot([], [], 'r-', label='Red Channel')
-line_g, = ax.plot([], [], 'g-', label='Green Channel')
-line_b, = ax.plot([], [], 'b-', label='Blue Channel')
+fig, ax1 = plt.subplots(figsize=(12, 6))
+ax2 = ax1.twinx()  # Create secondary Y-axis
 
-# --- Plot Styling ---
+# Camera Lines (Solid)
+line_r_cam, = ax1.plot([], [], 'r-', label='Cam Red', linewidth=1)
+line_g_cam, = ax1.plot([], [], 'g-', label='Cam Green', linewidth=1)
+line_b_cam, = ax1.plot([], [], 'b-', label='Cam Blue', linewidth=1)
+
+# Light Control Lines (Dashed/Thicker)
+line_r_lit, = ax2.plot([], [], 'r--', label='Light Red (Cmd)', alpha=0.6)
+line_g_lit, = ax2.plot([], [], 'g--', label='Light Green (Cmd)', alpha=0.6)
+line_b_lit, = ax2.plot([], [], 'b--', label='Light Blue (Cmd)', alpha=0.6)
+
 def setup_plot():
-    ax.set_ylim(0, 255)  
-    ax.set_xlim(0, MAX_POINTS)
-    ax.set_title('Real-time RGB Channel Brightness', fontsize=16)
-    ax.set_ylabel('Average Value (0-255)', fontsize=12)
-    ax.set_xlabel('Time', fontsize=12)
-    ax.grid(True)
-    ax.legend(loc='upper left')
+    ax1.set_ylim(0, 255)  
+    ax2.set_ylim(-0.1, 1.1) # Pad slightly to see 0 and 1 clearly
+    
+    ax1.set_title('Webcam Feedback vs. Laser Light Command', fontsize=16)
+    ax1.set_ylabel('Camera Brightness (0-255)', color='black', fontsize=12)
+    ax2.set_ylabel('Light Control Signal (0.0-1.0)', color='blue', fontsize=12)
+    ax1.set_xlabel('Time', fontsize=12)
+    
+    ax1.grid(True, which='both', linestyle='--', alpha=0.5)
+    
+    # Combine legends from both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', ncol=2)
+    
     plt.xticks(rotation=45, ha='right')
-    plt.subplots_adjust(bottom=0.20)
+    plt.subplots_adjust(bottom=0.20, right=0.85)
 
-# --- Animation Update Function ---
 def update(frame_number):
-    global current_light # Required to update the persistent lighting state
+    global current_light
     
     if cap:
         ret, frame = cap.read()
         if not ret:
-            print("Error: Can't receive frame (stream end?). Exiting ...")
-            ani.event_source.stop()
-            return line_r, line_g, line_b
-
-        # OpenCV reads frames in BGR format
+            return line_r_cam, line_g_cam, line_b_cam
+        
         b_mean = np.mean(frame[:, :, 0])
         g_mean = np.mean(frame[:, :, 1])
         r_mean = np.mean(frame[:, :, 2])
         
-        # --- Lighting Control Loop ---
-        # 1. Arrange webcam means into standard RGB order
         cam_rgb = np.array([r_mean, g_mean, b_mean])
-        
-        # 2. Calculate error (Target - Current Camera Value)
-        # If the camera is darker than 128, the error is positive.
         error = TARGET_BRIGHTNESS - cam_rgb
+        current_light = np.clip(current_light + (KP * error), 0.0, 1.0)
         
-        # 3. Update the light state based on the error
-        current_light = current_light + (KP * error)
-        
-        # 4. Clamp values to ensure they stay strictly between 0.0 and 1.0
-        current_light = np.clip(current_light, 0.0, 1.0)
-        
-        # 5. Push the new colors to your hardware
-        global queue
         set_color(current_light, queue, T=100)
-        
     else:
-        # Random Data Generation
-        r_mean = np.random.randint(50, 255)
-        g_mean = np.random.randint(50, 255)
-        b_mean = np.random.randint(50, 255)
+        r_mean, g_mean, b_mean = np.random.randint(50, 255, 3)
+        current_light = np.random.random(3)
 
-    # --- Data Handling ---
-    r_data.append(r_mean)
-    g_data.append(g_mean)
-    b_data.append(b_mean)
+    # Update Deques
+    r_cam.append(r_mean); g_cam.append(g_mean); b_cam.append(b_mean)
+    r_light.append(current_light[0]); g_light.append(current_light[1]); b_light.append(current_light[2])
     time_data.append(dt.datetime.now().strftime('%H:%M:%S'))
 
-    # --- Plot Update ---
-    x_data = np.arange(len(r_data))
-    line_r.set_data(x_data, r_data)
-    line_g.set_data(x_data, g_data)
-    line_b.set_data(x_data, b_data)
+    x_data = np.arange(len(r_cam))
+    
+    # Update Camera Lines
+    line_r_cam.set_data(x_data, r_cam)
+    line_g_cam.set_data(x_data, g_cam)
+    line_b_cam.set_data(x_data, b_cam)
+    
+    # Update Light Lines
+    line_r_lit.set_data(x_data, r_light)
+    line_g_lit.set_data(x_data, g_light)
+    line_b_lit.set_data(x_data, b_light)
 
-    ax.set_xticks(np.arange(len(time_data)))
-    ax.set_xticklabels(time_data, rotation=45, ha='right')
-    ax.set_xlim(0, len(r_data) - 1 if len(r_data) > 1 else 1)
+    ax1.set_xticks(np.arange(len(time_data)))
+    ax1.set_xticklabels(time_data, rotation=45, ha='right')
+    ax1.set_xlim(0, max(1, len(r_cam) - 1))
 
-    fig.canvas.draw()
-    fig.canvas.flush_events()
+    return line_r_cam, line_g_cam, line_b_cam, line_r_lit, line_g_lit, line_b_lit
 
-    return line_r, line_g, line_b
-
-# --- Main Execution ---
 if __name__ == '__main__':
     setup_plot()
-
     ani = animation.FuncAnimation(
-        fig,
-        update,
-        interval=UPDATE_INTERVAL_MS,
-        blit=True,
-        cache_frame_data=False 
+        fig, update, interval=UPDATE_INTERVAL_MS, blit=True, cache_frame_data=False 
     )
-
     plt.show()
 
-    # --- Cleanup ---
-    if cap:
-        cap.release()
+    if cap: cap.release()
     cv2.destroyAllWindows()
-    print("Script finished and resources released.")
