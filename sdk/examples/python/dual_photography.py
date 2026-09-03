@@ -12,6 +12,7 @@ import math
 import time
 import cv2
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # --- Data Acquisition Function ---
 def get_camera_line_data(cap, num_points=100):
@@ -113,7 +114,8 @@ if __name__ == "__main__":
         arr_col_rew = np.zeros((T_rew, 3)) # Laser OFF
 
         #num_lines = 80 # Vertical and horizontal resolution of the final image
-        num_lines = 200 # Vertical and horizontal resolution of the final image
+        #num_lines = 250 # Vertical and horizontal resolution of the final image
+        num_lines = 550 # Vertical and horizontal resolution of the final image
         
         lines_y = np.linspace(y_max, y_min, num_lines)
         lines_x = np.linspace(x_max, x_min, num_lines)
@@ -121,11 +123,11 @@ if __name__ == "__main__":
 
         print("\nStarting scene scan...")
         # --- Main Scanning Loop ---
-        for idx_y, y in enumerate(lines_y):
+        for idx_y, y in tqdm(enumerate(lines_y)):
             line_arr = []
             
             for idx_x, x in enumerate(lines_x):
-                print(f"Scanning {idx_x + 1}/{num_lines}   {idx_y + 1}/{num_lines}", end='\r')
+                #print(f"Scanning {idx_x + 1}/{num_lines}   {idx_y + 1}/{num_lines}", end='\r')
                 arr_pos[:, 0] = x
                 arr_pos[:, 1] = y
                 arr_pos_rew[:, 1] = y
@@ -151,7 +153,7 @@ if __name__ == "__main__":
         # --- Display Result ---
         plt.figure(figsize=(8, 8))
         plt.imshow(img, cmap='viridis', extent=[x_min, x_max, y_min, y_max])
-        plt.title('Dual Photography Scan (Webcam)')
+        plt.title('Dual Photography Scan')
         plt.xlabel('Horizontal Scan')
         plt.ylabel('Vertical Scan')
         plt.colorbar(label='Measured Brightness')
