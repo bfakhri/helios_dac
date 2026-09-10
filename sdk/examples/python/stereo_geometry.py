@@ -195,6 +195,41 @@ class StereoCameraModel:
 
         return (d1 + d2) / 2.0
 
+    def rescale(self, new_image_size: Tuple[int, int]) -> "StereoCameraModel":
+        """
+        Rescale camera intrinsic parameters and projection matrices to match a new image resolution.
+        """
+        orig_w, orig_h = self.image_size
+        new_w, new_h = new_image_size
+
+        if orig_w == new_w and orig_h == new_h:
+            return self
+
+        sx = float(new_w) / float(orig_w)
+        sy = float(new_h) / float(orig_h)
+
+        K1_new = self.K1.copy()
+        K1_new[0, 0] *= sx
+        K1_new[0, 2] *= sx
+        K1_new[1, 1] *= sy
+        K1_new[1, 2] *= sy
+
+        K2_new = self.K2.copy()
+        K2_new[0, 0] *= sx
+        K2_new[0, 2] *= sx
+        K2_new[1, 1] *= sy
+        K2_new[1, 2] *= sy
+
+        return StereoCameraModel(
+            K1=K1_new,
+            D1=self.D1.copy(),
+            K2=K2_new,
+            D2=self.D2.copy(),
+            R=self.R.copy(),
+            T=self.T.copy(),
+            image_size=(int(new_w), int(new_h)),
+        )
+
     def save(self, filepath: str) -> None:
         """Save calibration model to JSON file."""
         data = {

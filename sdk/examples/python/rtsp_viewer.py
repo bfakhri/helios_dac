@@ -143,12 +143,74 @@ def draw_epipolar_lines(
             cv2.line(frame1, (0, y0_1), (w1, yw_1), color, 1, cv2.LINE_AA)
 
 
+def draw_2d_detections(
+    frame: np.ndarray,
+    detections: List[Detection2D],
+    matched_dets: Optional[set] = None,
+    color: Tuple[int, int, int] = (255, 180, 0),
+) -> None:
+    """
+    Render 2D object detections on a camera frame.
+    Draws bounding boxes, confidence badges, centroids, and ground points.
+    If matched_dets is provided, unmatched 2D detections are highlighted with [2D] badges.
+    """
+    fh, fw = frame.shape[:2]
+    for det in detections:
+        is_matched = (matched_dets is not None and id(det) in matched_dets)
+        if is_matched:
+            # 3D renderer will render matched detections with 3D coordinates
+            continue
+
+        x1, y1, x2, y2 = det.bbox
+        # Draw 2D bounding box
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+        # Draw centroid crosshair
+        cx, cy = int(round(det.centroid[0])), int(round(det.centroid[1]))
+        cv2.drawMarker(frame, (cx, cy), color, cv2.MARKER_CROSS, 8, 1)
+
+        # Draw ground contact point (bottom-center)
+        gx, gy = int(round(det.ground_point[0])), int(round(det.ground_point[1]))
+        cv2.circle(frame, (gx, gy), 3, (0, 255, 255), -1)
+
+        # 2D Label Badge
+        label_2d = f"[2D] {det.class_name.capitalize()} ({int(det.confidence * 100)}%)"
+        (tw, th), _ = cv2.getTextSize(label_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+
+        # Position label pill above bbox if space allows, otherwise inside top
+        if y1 >= th + 10:
+            box_top = y1 - th - 8
+            box_bottom = y1
+            text_y = box_top + th + 3
+        else:
+            box_top = y1
+            box_bottom = min(fh, y1 + th + 8)
+            text_y = box_top + th + 3
+
+        box_right = min(fw, x1 + tw + 8)
+        cv2.rectangle(frame, (x1, box_top), (box_right, box_bottom), (25, 25, 25), -1)
+        cv2.rectangle(frame, (x1, box_top), (box_right, box_bottom), color, 1)
+        cv2.putText(
+            frame,
+            label_2d,
+            (x1 + 4, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+
 def draw_3d_detections(
     frame1: np.ndarray,
     frame2: np.ndarray,
     matches: List[StereoMatch]
 ) -> None:
-    """Render bounding boxes, track IDs, and 3D coordinate badges on both camera frames."""
+    """Render bounding boxes, track IDs, 2D confidence, and 3D coordinate badges on both camera frames."""
+    fh1, fw1 = frame1.shape[:2]
+    fh2, fw2 = frame2.shape[:2]
+
     for m in matches:
         color = get_track_color(m.track_id)
         x, y, z = m.point_3d[0], m.point_3d[1], m.point_3d[2]
@@ -157,32 +219,57 @@ def draw_3d_detections(
         # Draw Camera 1 Box & Label
         x1_1, y1_1, x2_1, y2_1 = m.det1.bbox
         cv2.rectangle(frame1, (x1_1, y1_1), (x2_1, y2_1), color, 2)
-        cv2.circle(frame1, (int(m.det1.centroid[0]), int(m.det1.centroid[1])), 4, (0, 0, 255), -1)
+        cv2.circle(frame1, (int(round(m.det1.centroid[0])), int(round(m.det1.centroid[1]))), 4, (0, 0, 255), -1)
 
-        label_title = f"[ID:{m.track_id}] {m.class_name.capitalize()}"
+        label_title1 = f"[ID:{m.track_id}] {m.class_name.capitalize()} ({int(m.det1.confidence * 100)}%)"
         label_coord = f"3D: X={x:+.2f} Y={y:+.2f} Z={z:.2f}m (D:{dist:.2f}m)"
 
-        # Label background pill
-        (tw1, th1), _ = cv2.getTextSize(label_title, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        (tw1_1, th1_1), _ = cv2.getTextSize(label_title1, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
         (tw2, th2), _ = cv2.getTextSize(label_coord, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
-        max_tw = max(tw1, tw2)
+        max_tw1 = max(tw1_1, tw2)
 
-        box_top = max(0, y1_1 - 36)
-        cv2.rectangle(frame1, (x1_1, box_top), (x1_1 + max_tw + 10, y1_1), (30, 30, 30), -1)
-        cv2.rectangle(frame1, (x1_1, box_top), (x1_1 + max_tw + 10, y1_1), color, 1)
-        cv2.putText(frame1, label_title, (x1_1 + 5, box_top + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(frame1, label_coord, (x1_1 + 5, box_top + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+        if y1_1 >= 38:
+            box_top1 = y1_1 - 36
+            box_bot1 = y1_1
+            t1_y1 = box_top1 + 14
+            t2_y1 = box_top1 + 30
+        else:
+            box_top1 = y1_1
+            box_bot1 = min(fh1, y1_1 + 36)
+            t1_y1 = box_top1 + 14
+            t2_y1 = box_top1 + 30
+
+        box_r1 = min(fw1, x1_1 + max_tw1 + 10)
+        cv2.rectangle(frame1, (x1_1, box_top1), (box_r1, box_bot1), (30, 30, 30), -1)
+        cv2.rectangle(frame1, (x1_1, box_top1), (box_r1, box_bot1), color, 1)
+        cv2.putText(frame1, label_title1, (x1_1 + 5, t1_y1), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(frame1, label_coord, (x1_1 + 5, t2_y1), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
 
         # Draw Camera 2 Box & Label
         x1_2, y1_2, x2_2, y2_2 = m.det2.bbox
         cv2.rectangle(frame2, (x1_2, y1_2), (x2_2, y2_2), color, 2)
-        cv2.circle(frame2, (int(m.det2.centroid[0]), int(m.det2.centroid[1])), 4, (0, 0, 255), -1)
+        cv2.circle(frame2, (int(round(m.det2.centroid[0])), int(round(m.det2.centroid[1]))), 4, (0, 0, 255), -1)
 
-        box_top2 = max(0, y1_2 - 36)
-        cv2.rectangle(frame2, (x1_2, box_top2), (x1_2 + max_tw + 10, y1_2), (30, 30, 30), -1)
-        cv2.rectangle(frame2, (x1_2, box_top2), (x1_2 + max_tw + 10, y1_2), color, 1)
-        cv2.putText(frame2, label_title, (x1_2 + 5, box_top2 + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(frame2, label_coord, (x1_2 + 5, box_top2 + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+        label_title2 = f"[ID:{m.track_id}] {m.class_name.capitalize()} ({int(m.det2.confidence * 100)}%)"
+        (tw1_2, th1_2), _ = cv2.getTextSize(label_title2, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
+        max_tw2 = max(tw1_2, tw2)
+
+        if y1_2 >= 38:
+            box_top2 = y1_2 - 36
+            box_bot2 = y1_2
+            t1_y2 = box_top2 + 14
+            t2_y2 = box_top2 + 30
+        else:
+            box_top2 = y1_2
+            box_bot2 = min(fh2, y1_2 + 36)
+            t1_y2 = box_top2 + 14
+            t2_y2 = box_top2 + 30
+
+        box_r2 = min(fw2, x1_2 + max_tw2 + 10)
+        cv2.rectangle(frame2, (x1_2, box_top2), (box_r2, box_bot2), (30, 30, 30), -1)
+        cv2.rectangle(frame2, (x1_2, box_top2), (box_r2, box_bot2), color, 1)
+        cv2.putText(frame2, label_title2, (x1_2 + 5, t1_y2), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(frame2, label_coord, (x1_2 + 5, t2_y2), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
 
 
 def render_bev_map(
@@ -284,6 +371,10 @@ def main() -> None:
     parser.add_argument("--title2", type=str, default="Camera 2 (Right)", help="Overlay title for Camera 2")
     parser.add_argument("--bev", action="store_true", default=True, help="Enable Bird's-Eye View (BEV) 3D mini-map")
     parser.add_argument("--no-bev", dest="bev", action="store_false", help="Disable Bird's-Eye View (BEV) 3D mini-map")
+    parser.add_argument("--show-2d", dest="show_2d", action="store_true", default=True, help="Show 2D object detections overlay (default: True)")
+    parser.add_argument("--no-2d", dest="show_2d", action="store_false", help="Hide 2D object detections overlay")
+    parser.add_argument("--show-3d", dest="show_3d", action="store_true", default=True, help="Show 3D stereo triangulation overlay (default: True)")
+    parser.add_argument("--no-3d", dest="show_3d", action="store_false", help="Hide 3D stereo triangulation overlay")
     parser.add_argument("--epipolar", action="store_true", default=False, help="Enable epipolar lines by default")
     parser.add_argument("--export-json", type=str, default=None, help="Path to write live 3D telemetry stream in JSON Lines format")
 
@@ -345,6 +436,8 @@ def main() -> None:
     # Performance & State Variables
     prev_time = time.time()
     fps = 0.0
+    show_2d = args.show_2d
+    show_3d = args.show_3d
     show_epipolar = args.epipolar
     show_bev = args.bev
     detect_enabled = (detector is not None)
@@ -352,11 +445,14 @@ def main() -> None:
 
     print("\nInteractive Keyboard Controls:")
     print("  'q' or ESC : Quit")
-    print("  'd'        : Toggle Object Detection & 3D Triangulation")
+    print("  'd'        : Toggle Perception / Detection Pipeline")
+    print("  '2'        : Toggle 2D Detections Overlay")
+    print("  '3'        : Toggle 3D Detections Overlay")
     print("  'e'        : Toggle Epipolar Lines Overlay")
     print("  'm'        : Toggle Bird's-Eye View (BEV) 3D Mini-Map")
-    print("  's'        : Save Snapshot (Images + 3D Coordinates JSON)")
+    print("  's'        : Save Snapshot (Images + 2D/3D Telemetry JSON)")
     print("  'r'        : Reset 3D Tracks & Synchronization Queues")
+    print("  'c'        : Save Stereo Calibration to JSON")
     print("  'f'        : Toggle Fullscreen\n")
 
     try:
@@ -386,6 +482,11 @@ def main() -> None:
             target_h = args.height if args.height else h1
             target_w = args.width if args.width else w1
 
+            # Ensure camera geometry model matches the actual frame coordinate space
+            if camera_model.image_size != (target_w, target_h):
+                camera_model = camera_model.rescale((target_w, target_h))
+                matcher.camera_model = camera_model
+
             # Prepare frame 1
             if ret1 and frame1 is not None:
                 if frame1.shape[:2] != (target_h, target_w):
@@ -402,27 +503,64 @@ def main() -> None:
 
             # 2. Perception & 3D Localization Pipeline
             matches: List[StereoMatch] = []
-            if detect_enabled and detector is not None and ret1 and ret2:
-                dets1 = detector.detect(frame1)
-                dets2 = detector.detect(frame2)
-                matches = matcher.match_and_triangulate(dets1, dets2, smoother=smoother)
+            dets1: List[Detection2D] = []
+            dets2: List[Detection2D] = []
+
+            if detect_enabled and detector is not None:
+                if ret1 and frame1 is not None:
+                    dets1 = detector.detect(frame1)
+                if ret2 and frame2 is not None:
+                    dets2 = detector.detect(frame2)
+
+                if show_3d and ret1 and ret2 and dets1 and dets2:
+                    matches = matcher.match_and_triangulate(dets1, dets2, smoother=smoother)
+
+                # Track matched detection IDs to avoid duplicate box drawing
+                matched_dets1 = {id(m.det1) for m in matches} if show_3d else set()
+                matched_dets2 = {id(m.det2) for m in matches} if show_3d else set()
+
+                # Draw 2D Overlays
+                if show_2d:
+                    if ret1 and frame1 is not None and dets1:
+                        draw_2d_detections(frame1, dets1, matched_dets=matched_dets1)
+                    if ret2 and frame2 is not None and dets2:
+                        draw_2d_detections(frame2, dets2, matched_dets=matched_dets2)
 
                 # Draw 3D Overlays
-                draw_3d_detections(frame1, frame2, matches)
+                if show_3d and matches:
+                    draw_3d_detections(frame1, frame2, matches)
 
-                if show_epipolar:
-                    draw_epipolar_lines(frame1, frame2, matches, camera_model)
+                    if show_epipolar:
+                        draw_epipolar_lines(frame1, frame2, matches, camera_model)
 
-                # Log / Export continuous 3D telemetry
-                if telemetry_file and matches:
+                # Log / Export continuous 2D & 3D telemetry
+                if telemetry_file and (matches or dets1 or dets2):
                     telemetry_payload = {
                         "timestamp": time.time(),
                         "sync_delta_ms": synchronizer.last_sync_delta_ms,
-                        "targets": [
+                        "detections_2d_cam1": [
+                            {
+                                "class": d.class_name,
+                                "confidence": round(float(d.confidence), 3),
+                                "bbox": list(d.bbox),
+                                "centroid": [round(float(c), 2) for c in d.centroid],
+                            }
+                            for d in dets1
+                        ],
+                        "detections_2d_cam2": [
+                            {
+                                "class": d.class_name,
+                                "confidence": round(float(d.confidence), 3),
+                                "bbox": list(d.bbox),
+                                "centroid": [round(float(c), 2) for c in d.centroid],
+                            }
+                            for d in dets2
+                        ],
+                        "targets_3d": [
                             {
                                 "track_id": m.track_id,
                                 "class": m.class_name,
-                                "confidence": round(m.confidence, 3),
+                                "confidence": round(float(m.confidence), 3),
                                 "point_3d_m": [round(float(v), 3) for v in m.point_3d],
                                 "distance_m": round(float(m.distance_m), 3),
                                 "bbox_cam1": list(m.det1.bbox),
@@ -461,7 +599,7 @@ def main() -> None:
             status_text = (
                 f"FPS: {fps:.1f} | Δt: {sync_stats['last_delta_ms']:.1f}ms "
                 f"(Avg: {sync_stats['avg_delta_ms']:.1f}ms ±{sync_stats['jitter_ms']:.1f}) | "
-                f"Synced: {sync_stats['synced_pairs']} | 3D Targets: {len(matches)}"
+                f"2D: L={len(dets1)} R={len(dets2)} | 3D: {len(matches)}"
             )
             cv2.rectangle(combined_display, (0, combined_display.shape[0] - 30), (combined_display.shape[1], combined_display.shape[0]), (20, 20, 20), -1)
             cv2.putText(
@@ -483,7 +621,13 @@ def main() -> None:
                 break
             elif key == ord("d"):
                 detect_enabled = not detect_enabled
-                print(f"[Controls] Detection & 3D Triangulation: {'ON' if detect_enabled else 'OFF'}")
+                print(f"[Controls] Perception Pipeline: {'ON' if detect_enabled else 'OFF'}")
+            elif key == ord("2"):
+                show_2d = not show_2d
+                print(f"[Controls] 2D Detections Overlay: {'ON' if show_2d else 'OFF'}")
+            elif key == ord("3"):
+                show_3d = not show_3d
+                print(f"[Controls] 3D Detections Overlay: {'ON' if show_3d else 'OFF'}")
             elif key == ord("e"):
                 show_epipolar = not show_epipolar
                 print(f"[Controls] Epipolar Lines: {'ON' if show_epipolar else 'OFF'}")
@@ -500,18 +644,39 @@ def main() -> None:
                 cv2.imwrite(f"snapshot_cam1_{ts}.jpg", frame1)
                 cv2.imwrite(f"snapshot_cam2_{ts}.jpg", frame2)
 
-                # Save 3D telemetry metadata
+                # Save 2D & 3D telemetry metadata
                 meta = {
                     "timestamp": ts,
                     "sync_delta_ms": synchronizer.last_sync_delta_ms,
                     "baseline_m": float(camera_model.T[0, 0]),
+                    "detections_2d_cam1": [
+                        {
+                            "class": d.class_name,
+                            "confidence": round(float(d.confidence), 3),
+                            "bbox": list(d.bbox),
+                            "centroid": [round(float(c), 2) for c in d.centroid],
+                            "ground_point": [round(float(g), 2) for g in d.ground_point],
+                        }
+                        for d in dets1
+                    ],
+                    "detections_2d_cam2": [
+                        {
+                            "class": d.class_name,
+                            "confidence": round(float(d.confidence), 3),
+                            "bbox": list(d.bbox),
+                            "centroid": [round(float(c), 2) for c in d.centroid],
+                            "ground_point": [round(float(g), 2) for g in d.ground_point],
+                        }
+                        for d in dets2
+                    ],
                     "detections_3d": [
                         {
                             "track_id": m.track_id,
                             "class": m.class_name,
-                            "point_3d_m": [float(v) for v in m.point_3d],
-                            "distance_m": float(m.distance_m),
-                            "epipolar_error_px": float(m.epipolar_error_px),
+                            "confidence": round(float(m.confidence), 3),
+                            "point_3d_m": [round(float(v), 3) for v in m.point_3d],
+                            "distance_m": round(float(m.distance_m), 3),
+                            "epipolar_error_px": round(float(m.epipolar_error_px), 3),
                             "bbox_cam1": list(m.det1.bbox),
                             "bbox_cam2": list(m.det2.bbox),
                         }
