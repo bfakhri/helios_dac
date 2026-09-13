@@ -35,7 +35,6 @@ Keyboard Controls:
     a         : Toggle joint angle labels                 [pose mode only]
     k         : Toggle keypoint dot labels                [pose mode only]
     h         : Toggle help / HUD overlay
-    c         : Save snapshot to disk
     r         : Reset keypoint smoother                   [pose mode only]
     f         : Toggle fullscreen
 """
@@ -478,7 +477,6 @@ def draw_hud(
             ("a",       "Toggle joint angles"),
             ("k",       "Toggle keypoint labels"),
             ("h",       "Toggle this help"),
-            ("c",       "Save snapshot"),
             ("r",       "Reset smoother"),
             ("f",       "Fullscreen"),
         ]
@@ -700,7 +698,6 @@ def main() -> None:
         print("  a        : Toggle joint angle labels")
         print("  k        : Toggle keypoint labels")
     print("  h        : Toggle help / HUD")
-    print("  c        : Save snapshot")
     if not use_detect:
         print("  r        : Reset keypoint smoother")
     print("  f        : Toggle fullscreen\n")
@@ -843,12 +840,6 @@ def main() -> None:
                 if engine.pose_detector.smoother:  # type: ignore
                     engine.pose_detector.smoother.reset()  # type: ignore
                 print("[Viewer] Keypoint smoother reset.")
-
-            elif key == ord("c"):               # Snapshot
-                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                snap_path = f"pose_snapshot_{ts}.jpg"
-                cv2.imwrite(snap_path, frame)
-                print(f"[Viewer] Snapshot saved: {snap_path}")
 
             elif key == ord("f"):               # Toggle fullscreen
                 is_fullscreen = not is_fullscreen
